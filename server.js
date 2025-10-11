@@ -61,7 +61,7 @@ app.get('/themes/download/:filename',(req,res)=>{
 })
 
 
-app.use('/themes/previews',express.static('/Users/sava/Downloads/previews'));
+app.use('/themes/previews',express.static('/home/sava/docker-db/themes/previews/'));
 
 
 app.get('/', (req, res) => {
