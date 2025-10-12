@@ -53,7 +53,7 @@ app.get('/themes/:page', async (req, res) => {
 
 app.get('/themes/download/:filename',(req,res)=>{
     const {filename} = req.params;
-    const filepath = `/home/sava/docker-db/themes/zips/${filename}`;
+    const filepath = `/app/themes/zips/${filename}`;
     if(!fs.existsSync(filepath)) return res.status(404).send("File not Found");
 
     res.download(filepath,filename);
@@ -61,7 +61,7 @@ app.get('/themes/download/:filename',(req,res)=>{
 })
 
 
-app.use('/themes/previews',express.static('/home/sava/docker-db/themes/previews/'));
+app.use('/themes/previews', express.static('/app/themes/previews/'));
 
 
 app.get('/', (req, res) => {
