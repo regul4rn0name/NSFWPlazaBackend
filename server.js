@@ -64,6 +64,92 @@ app.get('/themes/download/:filename',(req,res)=>{
 app.use('/themes/previews', express.static('/app/themes/previews/'));
 
 
+app.get('/splashes/:page', async (req, res) => {
+    try {
+        const page = req.params['page'];
+        const skip = 20*(page-1);
+        console.log(page);
+        const collection = monogoDB.collection('s3api_per_key_metadata');
+        const data = await collection.find({ s3key: { $regex: '(splashes/[^/]+\\.zip)$', $options: 'i' }}, { projection: { _id: 1, s3key: 1 } }).skip(skip).limit(20).toArray();
+        console.log(data);
+        
+        console.log("Filtered:", data.map(f => f.s3key));
+        const result = data.map(item=>{
+            const filename = item.s3key.split("/").pop();
+            const preview = filename.replace(/\.zip$/i, '');
+            if(!preview) return null;
+            return {
+                _id:item._id.toString(),
+                filename:filename,
+                url:preview
+
+            };
+        }).filter(Boolean);
+
+        res.status(200).json(result);
+        
+
+    } catch (error) {
+        res.status(500);
+    }
+})
+
+app.get('/splashes/download/:filename',(req,res)=>{
+    const {filename} = req.params;
+    const filepath = `/app/splashes/zips/${filename}`;
+    if(!fs.existsSync(filepath)) return res.status(404).send("File not Found");
+
+    res.download(filepath,filename);
+
+})
+
+
+app.use('/splashes/previews', express.static('/app/splashes/previews'));
+
+
+app.get('/badges/:page', async (req, res) => {
+    try {
+        const page = req.params['page'];
+        const skip = 20*(page-1);
+        console.log(page);
+        const collection = monogoDB.collection('s3api_per_key_metadata');
+        const data = await collection.find({ s3key: { $regex: '(badges/[^/]+\\.zip)$', $options: 'i' } }, { projection: { _id: 1, s3key: 1 } }).skip(skip).limit(20).toArray();
+        console.log(data);
+        
+        console.log("Filtered:", data.map(f => f.s3key));
+        const result = data.map(item=>{
+            const filename = item.s3key.split("/").pop();
+            const preview = filename.replace(/\.zip$/i, '');
+            if(!preview) return null;
+            return {
+                _id:item._id.toString(),
+                filename:filename,
+                url:preview
+
+            };
+        }).filter(Boolean);
+
+        res.status(200).json(result);
+        
+
+    } catch (error) {
+        res.status(500);
+    }
+})
+
+app.get('/badges/download/:filename',(req,res)=>{
+    const {filename} = req.params;
+    const filepath = `/app/badges/zips/${filename}`;
+    if(!fs.existsSync(filepath)) return res.status(404).send("File not Found");
+
+    res.download(filepath,filename);
+
+})
+
+
+app.use('/badges/previews', express.static('/app/badges/previews'));
+
+
 app.get('/', (req, res) => {
     const data = "abaunda";
     return res.json(data);
