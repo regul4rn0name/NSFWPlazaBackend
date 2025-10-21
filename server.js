@@ -26,13 +26,11 @@ app.get('/themes/:page', async (req, res) => {
         const page = req.params['page'];
         const skip = 20*(page-1);
         console.log(page);
-        const collection = monogoDB.collection('s3api_per_key_metadata');
-        const data = await collection.find({s3key: { $regex: /\/(nsfw|themes)\/[^/]+\.zip$/i }}, { projection: { _id: 1, s3key: 1 } }).skip(skip).limit(20).toArray();
-        console.log(data);
-        
-        console.log("Filtered:", data.map(f => f.s3key));
+        const collection = monogoDB.collection('themes');
+        const data = await collection.find().skip(skip).limit(20).toArray();
+        console.log("Filtered:", data.map(f => f.name));
         const result = data.map(item=>{
-            const filename = item.s3key.split("/").pop();
+            const filename = item.name.split("/").pop();
             const preview = filename.replace(/\.zip$/i, '');
             if(!preview) return null;
             return {
@@ -69,13 +67,13 @@ app.get('/splashes/:page', async (req, res) => {
         const page = req.params['page'];
         const skip = 20*(page-1);
         console.log(page);
-        const collection = monogoDB.collection('s3api_per_key_metadata');
-        const data = await collection.find({ s3key: { $regex: '(splashes/[^/]+\\.zip)$', $options: 'i' }}, { projection: { _id: 1, s3key: 1 } }).skip(skip).limit(20).toArray();
+        const collection = monogoDB.collection('splashes');
+        const data = await collection.find().skip(skip).limit(20).toArray();
         console.log(data);
         
-        console.log("Filtered:", data.map(f => f.s3key));
+        console.log("Filtered:", data.map(f => f.name));
         const result = data.map(item=>{
-            const filename = item.s3key.split("/").pop();
+            const filename = item.name.split("/").pop();
             const preview = filename.replace(/\.zip$/i, '');
             if(!preview) return null;
             return {
@@ -112,13 +110,13 @@ app.get('/badges/:page', async (req, res) => {
         const page = req.params['page'];
         const skip = 20*(page-1);
         console.log(page);
-        const collection = monogoDB.collection('s3api_per_key_metadata');
-        const data = await collection.find({ s3key: { $regex: '(badges/[^/]+\\.zip)$', $options: 'i' } }, { projection: { _id: 1, s3key: 1 } }).skip(skip).limit(20).toArray();
+        const collection = monogoDB.collection('badges');
+        const data = await collection.find().skip(skip).limit(20).toArray();
         console.log(data);
         
-        console.log("Filtered:", data.map(f => f.s3key));
+        console.log("Filtered:", data.map(f => f.name));
         const result = data.map(item=>{
-            const filename = item.s3key.split("/").pop();
+            const filename = item.name.split("/").pop();
             const preview = filename.replace(/\.zip$/i, '');
             if(!preview) return null;
             return {
