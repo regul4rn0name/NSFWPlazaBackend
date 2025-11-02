@@ -144,9 +144,27 @@ app.get('/themes/:page', async (req, res) => {
 app.post('/add/:collection',upload.fields([{name:"zip",maxCount:1},{name:"preview",maxCount:1}]), async (req, res) => {
   try {
     const {collection} = req.params;
+    const tags = req.body.tags ? JSON.parse(req.body.tags):[];
+    
     const zip = req.files.zip?.[0];
     const preview = req.files.preview?.[0];
     if(!zip || !preview) return res.status(400).send(`No ${collection} or preview`);
+    try {
+      const dbCollection = mongoDB.collection("moderate");
+      const now = new Date();
+      const date = now.toLocaleString('en-GB', { 
+        timeZone: 'Europe/Berlin',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).replace(',', '').replace(/\//g, '.');
+      const result = await dbCollection.insertOne({name:zip.filename,tags,date,collection});
+    } catch (error) {
+      return res.status(500).send("Internal Server Error");
+    }
     res.json({
       success:true,
       collection,
