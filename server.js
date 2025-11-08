@@ -6,10 +6,11 @@ const fs = require('fs');
 const multer = require('multer');
 const { join } = require('path');
 const path = require('path');
+const AdmZip = require('adm-zip');
 
 
 const app = express();
-const baseDir = "/app"
+const baseDir = "/Users/sava/Downloads/app"
 const mongoUri = process.env.MONGO_URI;
 const mongoClient = new mongodb.MongoClient(mongoUri);
 let mongoDB;
@@ -28,17 +29,19 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const { collection } = req.params;
     const allowed = ["themes", "splashes", "badges"];
-    if (!allowed.includes(collection)) {
-      return cb(new Error("Invalid collection name"));
-    }
-    let subfolder = file.fieldname === "zip" ? "zips" : "previews";
-    const targetDir = path.join(baseDir, collection, subfolder);
+    if (!allowed.includes(collection)) return cb(new Error("Invalid collection name"));
+
+    const targetDir = path.join(baseDir, collection, "zips");
     fs.mkdirSync(targetDir, { recursive: true });
     cb(null, targetDir);
-  }, filename: (req, file, cb) => {
-    cb(null,file.originalname);
   },
+  filename: (req, file, cb) => {
+    // Let multer save with original name first
+    cb(null, file.originalname);
+  }
 });
+
+
 
 const upload = multer({storage});
 
@@ -141,42 +144,63 @@ app.get('/themes/:page', async (req, res) => {
     res.status(500);
   }
 })
-app.post('/add/:collection',upload.fields([{name:"zip",maxCount:1},{name:"preview",maxCount:1}]), async (req, res) => {
+app.post('/add/:collection', upload.single("zip"), async (req, res) => {
   try {
-    const {collection} = req.params;
-    const tags = req.body.tags ? JSON.parse(req.body.tags):[];
-    
-    const zip = req.files.zip?.[0];
-    const preview = req.files.preview?.[0];
-    if(!zip || !preview) return res.status(400).send(`No ${collection} or preview`);
-    try {
-      const dbCollection = mongoDB.collection("moderate");
-      const now = new Date();
-      const date = now.toLocaleString('en-GB', { 
-        timeZone: 'Europe/Berlin',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).replace(',', '').replace(/\//g, '.');
-      const result = await dbCollection.insertOne({name:zip.filename,tags,date,collection});
-    } catch (error) {
-      return res.status(500).send("Internal Server Error");
-    }
+    const { collection } = req.params;
+    const tags = req.body.tags ? JSON.parse(req.body.tags) : [];
+    const zip = req.file;
+    if (!zip) return res.status(400).send(`No ${collection} zip uploaded`);
+
+    const nameFromFrontend = req.body.name?.trim() || zip.originalname;
+    const safeName = nameFromFrontend.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const finalZipName = safeName.endsWith(".zip") ? safeName : safeName + ".zip";
+
+    const newZipPath = path.join(zip.destination, finalZipName);
+    fs.renameSync(zip.path, newZipPath);
+
+    const previewDir = path.join(baseDir, collection, "previews");
+    fs.mkdirSync(previewDir, { recursive: true });
+
+    const zipFile = new AdmZip(newZipPath);
+    const previewFile = zipFile.getEntry("preview.png");
+    if (!previewFile) return res.status(400).send("No preview found in zip");
+
+    const previewOutput = path.join(previewDir, finalZipName.replace(/\.zip$/i, ".png"));
+    fs.writeFileSync(previewOutput, previewFile.getData());
+
+    const dbCollection = mongoDB.collection("moderate");
+    const now = new Date();
+    const date = now.toLocaleString('en-GB', {
+      timeZone: 'Europe/Berlin',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', '').replace(/\//g, '.');
+
+    await dbCollection.insertOne({
+      name: finalZipName,
+      tags,
+      date,
+      collection
+    });
+
     res.json({
-      success:true,
+      success: true,
       collection,
-      zipPath:zip.path,
-      previewPath:preview.path,
+      zipPath: newZipPath,
+      previewPath: previewOutput,
     });
 
   } catch (error) {
     console.error(error);
     res.status(500).send("Internal Server Error");
   }
-})
+});
+
+
 app.get('/themes/download/:filename', (req, res) => {
   const { filename } = req.params;
   const filepath = `/app/themes/zips/${filename}`;
