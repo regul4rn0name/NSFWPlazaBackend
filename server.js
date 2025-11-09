@@ -174,44 +174,39 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     const zip = req.file;
     if (!zip) return res.status(400).send(`No ${collection} zip uploaded`);
 
+    // Sanitize the file name
     let nameFromFrontend = req.body.name?.trim() || zip.originalname;
     let safeName = nameFromFrontend.replace(/[^a-zA-Z0-9-_]/g, "_");
     if (!safeName.endsWith(".zip")) safeName += ".zip";
 
-    const collectionsToCheck = ["moderate", collection];
-    let baseName = safeName.replace(/\.zip$/i, "");
+    // Duplicate-name check ONLY in "moderate"
+    const baseName = safeName.replace(/\.zip$/i, "");
     let finalName = safeName;
     let counter = 1;
-
-    while (true) {
-      let exists = false;
-      for (let col of collectionsToCheck) {
-        const dbCol = mongoDB.collection(col);
-        const found = await dbCol.findOne({ name: finalName });
-        if (found) {
-          exists = true;
-          break;
-        }
-      }
-      if (!exists) break; // name is unique
+    while (await mongoDB.collection("moderate").findOne({ name: finalName })) {
       finalName = `${baseName}_${counter}.zip`;
       counter++;
     }
 
-    const newZipPath = path.join(zip.destination, finalName);
+    // Move file to proper folder
+    const targetDir = path.join(baseDir, collection, "zips");
+    fs.mkdirSync(targetDir, { recursive: true });
+    const newZipPath = path.join(targetDir, finalName);
     fs.renameSync(zip.path, newZipPath);
 
-    const previewDir = path.join(baseDir, collection, "previews");
-    fs.mkdirSync(previewDir, { recursive: true });
-
+    // Optional preview extraction
     const zipFile = new AdmZip(newZipPath);
     const previewFile = zipFile.getEntry("preview.png");
-    if (!previewFile) return res.status(400).send("No preview found in zip");
+    let previewOutput = null;
+    if (previewFile) {
+      const previewDir = path.join(baseDir, collection, "previews");
+      fs.mkdirSync(previewDir, { recursive: true });
+      previewOutput = path.join(previewDir, finalName.replace(/\.zip$/i, ".png"));
+      fs.writeFileSync(previewOutput, previewFile.getData());
+    }
 
-    const previewOutput = path.join(previewDir, finalName.replace(/\.zip$/i, ".png"));
-    fs.writeFileSync(previewOutput, previewFile.getData());
-
-    const dbCollection = mongoDB.collection(collection);
+    // Insert into "moderate"
+    const dbCollection = mongoDB.collection("moderate");
     const now = new Date();
     const date = now.toLocaleString('en-GB', {
       timeZone: 'Europe/Berlin',
@@ -229,20 +224,11 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
       date,
       collection
     });
-    console.log("added");
-    
+
     res.json({
       success: true,
       collection,
-      zipPath: newZipPath,
-      previewPath: previewOutput,
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Internal Server Error");
-  }
-});
+      zipPat
 
 
 app.get('/themes/download/:filename', (req, res) => {
