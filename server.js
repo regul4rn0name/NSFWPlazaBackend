@@ -10,7 +10,7 @@ const AdmZip = require('adm-zip');
 
 
 const app = express();
-const baseDir = "/Users/sava/Downloads/app"
+const baseDir = "/app"
 const mongoUri = process.env.MONGO_URI;
 const mongoClient = new mongodb.MongoClient(mongoUri);
 let mongoDB;
