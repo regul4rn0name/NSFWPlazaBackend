@@ -229,7 +229,8 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
       date,
       collection
     });
-
+    console.log("added");
+    
     res.json({
       success: true,
       collection,
