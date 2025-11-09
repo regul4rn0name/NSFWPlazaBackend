@@ -45,6 +45,29 @@ const storage = multer.diskStorage({
 
 const upload = multer({storage});
 
+app.get('/:collection/length', async (req, res) => {
+  const { collection } = req.params;
+  try {
+    if (!["themes", "splashes", "badges"].includes(collection)) {
+      return res.status(400).json({ error: "Invalid collection name" });
+    }
+
+    if (!mongoDB) {
+      return res.status(503).json({ error: "Database not connected yet" });
+    }
+
+    const dbCollection = mongoDB.collection(collection);
+
+    const count = await dbCollection.countDocuments({});
+
+    const pages = Math.ceil(count / 20);
+
+    return res.status(200).json({ count, pages });
+  } catch (error) {
+    console.error("Error getting collection length:", error);
+    return res.status(500).json({ error: "Failed to get collection length" });
+  }
+});
 
 // ------------------ TAGGING API ------------------
 
