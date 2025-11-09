@@ -228,7 +228,15 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     res.json({
       success: true,
       collection,
-      zipPat
+      zipPath: newZipPath,
+      previewPath: previewOutput,
+    });
+
+  } catch (error) {
+    console.error("Upload failed:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 
 app.get('/themes/download/:filename', (req, res) => {
