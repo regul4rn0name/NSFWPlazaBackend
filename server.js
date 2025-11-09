@@ -174,11 +174,31 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     const zip = req.file;
     if (!zip) return res.status(400).send(`No ${collection} zip uploaded`);
 
-    const nameFromFrontend = req.body.name?.trim() || zip.originalname;
-    const safeName = nameFromFrontend.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const finalZipName = safeName.endsWith(".zip") ? safeName : safeName + ".zip";
+    let nameFromFrontend = req.body.name?.trim() || zip.originalname;
+    let safeName = nameFromFrontend.replace(/[^a-zA-Z0-9-_]/g, "_");
+    if (!safeName.endsWith(".zip")) safeName += ".zip";
 
-    const newZipPath = path.join(zip.destination, finalZipName);
+    const collectionsToCheck = ["moderate", collection];
+    let baseName = safeName.replace(/\.zip$/i, "");
+    let finalName = safeName;
+    let counter = 1;
+
+    while (true) {
+      let exists = false;
+      for (let col of collectionsToCheck) {
+        const dbCol = mongoDB.collection(col);
+        const found = await dbCol.findOne({ name: finalName });
+        if (found) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) break; // name is unique
+      finalName = `${baseName}_${counter}.zip`;
+      counter++;
+    }
+
+    const newZipPath = path.join(zip.destination, finalName);
     fs.renameSync(zip.path, newZipPath);
 
     const previewDir = path.join(baseDir, collection, "previews");
@@ -188,10 +208,10 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     const previewFile = zipFile.getEntry("preview.png");
     if (!previewFile) return res.status(400).send("No preview found in zip");
 
-    const previewOutput = path.join(previewDir, finalZipName.replace(/\.zip$/i, ".png"));
+    const previewOutput = path.join(previewDir, finalName.replace(/\.zip$/i, ".png"));
     fs.writeFileSync(previewOutput, previewFile.getData());
 
-    const dbCollection = mongoDB.collection("moderate");
+    const dbCollection = mongoDB.collection(collection);
     const now = new Date();
     const date = now.toLocaleString('en-GB', {
       timeZone: 'Europe/Berlin',
@@ -204,7 +224,7 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     }).replace(',', '').replace(/\//g, '.');
 
     await dbCollection.insertOne({
-      name: finalZipName,
+      name: finalName,
       tags,
       date,
       collection
