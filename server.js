@@ -10,6 +10,7 @@ const AdmZip = require('adm-zip');
 
 
 const app = express();
+app.use(express.json());
 const baseDir = "/app"
 const mongoUri = process.env.MONGO_URI;
 const mongoClient = new mongodb.MongoClient(mongoUri);
@@ -36,7 +37,6 @@ const storage = multer.diskStorage({
     cb(null, targetDir);
   },
   filename: (req, file, cb) => {
-    // Let multer save with original name first
     cb(null, file.originalname);
   }
 });
@@ -174,12 +174,11 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     const zip = req.file;
     if (!zip) return res.status(400).send(`No ${collection} zip uploaded`);
 
-    // Sanitize the file name
+
     let nameFromFrontend = req.body.name?.trim() || zip.originalname;
     let safeName = nameFromFrontend.replace(/[^a-zA-Z0-9-_]/g, "_");
     if (!safeName.endsWith(".zip")) safeName += ".zip";
 
-    // Duplicate-name check ONLY in "moderate"
     const baseName = safeName.replace(/\.zip$/i, "");
     let finalName = safeName;
     let counter = 1;
@@ -188,13 +187,13 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
       counter++;
     }
 
-    // Move file to proper folder
+
     const targetDir = path.join(baseDir, collection, "zips");
     fs.mkdirSync(targetDir, { recursive: true });
     const newZipPath = path.join(targetDir, finalName);
     fs.renameSync(zip.path, newZipPath);
 
-    // Optional preview extraction
+
     const zipFile = new AdmZip(newZipPath);
     const previewFile = zipFile.getEntry("preview.png");
     let previewOutput = null;
@@ -342,6 +341,32 @@ app.use('/badges/previews', express.static('/app/badges/previews'));
 app.get('/', (req, res) => {
   const data = "abaunda";
   return res.json(data);
+})
+app.post('/:collection/search/:page',async (req,res)=>{
+  try {
+    const {search} = req.body;
+    const {collection,page} = req.params;
+    const skip = 20*(page-1);
+    if(!['themes','badges','splashes'].includes(collection)) return res.status(500);
+    const mongoCol = mongoDB.collection(collection)
+    const data = await mongoCol.find({"name":new RegExp(search,"i")}).skip(skip).limit(20).toArray();
+    const result = data.map(item => {
+      const filename = item.name.split("/").pop();
+      const preview = filename.replace(/\.zip$/i, '');
+      if (!preview) return null;
+      return {
+        _id: item._id.toString(),
+        filename: filename,
+        url: preview
+
+      };
+    }).filter(Boolean);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Internal Server Error");
+  }
 })
 app.listen(4000, () => {
   console.log("pisia");
