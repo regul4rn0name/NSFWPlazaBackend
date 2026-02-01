@@ -140,33 +140,6 @@ app.post("/:collection/:id/tags", express.json(), async (req, res) => {
   }
 });
 // END
-app.get('/themes/:page', async (req, res) => {
-  try {
-    const page = req.params['page'];
-    const skip = 20 * (page - 1);
-    console.log(page);
-    const collection = mongoDB.collection('themes');
-    const data = await collection.find().skip(skip).limit(20).toArray();
-    console.log("Filtered:", data.map(f => f.name));
-    const result = data.map(item => {
-      const filename = item.name.split("/").pop();
-      const preview = filename.replace(/\.zip$/i, '');
-      if (!preview) return null;
-      return {
-        _id: item._id.toString(),
-        filename: filename,
-        url: preview
-
-      };
-    }).filter(Boolean);
-
-    res.status(200).json(result);
-
-
-  } catch (error) {
-    res.status(500);
-  }
-})
 app.post('/add/:collection', upload.single("zip"), async (req, res) => {
   try {
     const { collection } = req.params;
@@ -207,20 +180,11 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     // Insert into "moderate"
     const dbCollection = mongoDB.collection("moderate");
     const now = new Date();
-    const date = now.toLocaleString('en-GB', {
-      timeZone: 'Europe/Berlin',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).replace(',', '').replace(/\//g, '.');
 
     await dbCollection.insertOne({
       name: finalName,
       tags,
-      date,
+      date:now,
       collection
     });
 
@@ -237,29 +201,25 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
   }
 });
 
-
-app.get('/themes/download/:filename', (req, res) => {
-  const { filename } = req.params;
-  const filepath = `/app/themes/zips/${filename}`;
-  if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
-
-  res.download(filepath, filename);
-
-})
-
-
-app.use('/themes/previews', express.static('/app/themes/previews/'));
-
-
-app.get('/splashes/:page', async (req, res) => {
+app.get('/:type/:page', async (req, res) => {
   try {
+    if(!['themes','badges','splashes'].includes(req.params['type'])){
+      return res.status(400);
+    }
+    const type = req.params['type'];
     const page = req.params['page'];
     const skip = 20 * (page - 1);
     console.log(page);
-    const collection = mongoDB.collection('splashes');
-    const data = await collection.find().skip(skip).limit(20).toArray();
-    console.log(data);
-
+    const collection = mongoDB.collection(type);
+    const {search='',sort='name',order='asc'} = req.query;
+    const query = {};
+    if(search){
+      query.name = new RegExp(search,'i');
+    }
+    const sortQuery = {
+      [sort]:order === 'asc' ? 1:-1
+    };
+    const data = await collection.find(query).sort(sortQuery).skip(skip).limit(20).toArray();
     console.log("Filtered:", data.map(f => f.name));
     const result = data.map(item => {
       const filename = item.name.split("/").pop();
@@ -281,92 +241,22 @@ app.get('/splashes/:page', async (req, res) => {
   }
 })
 
-app.get('/splashes/download/:filename', (req, res) => {
-  const { filename } = req.params;
-  const filepath = `/app/splashes/zips/${filename}`;
+app.get('/:collection/download/:filename', (req, res) => {
+  const { filename,collection } = req.params;
+  const filepath = `/app/${collection}/zips/${filename}`;
   if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
 
   res.download(filepath, filename);
 
 })
-
 
 app.use('/splashes/previews', express.static('/app/splashes/previews'));
-
-
-app.get('/badges/:page', async (req, res) => {
-  try {
-    const page = req.params['page'];
-    const skip = 20 * (page - 1);
-    console.log(page);
-    const collection = mongoDB.collection('badges');
-    const data = await collection.find().skip(skip).limit(20).toArray();
-    console.log(data);
-
-    console.log("Filtered:", data.map(f => f.name));
-    const result = data.map(item => {
-      const filename = item.name.split("/").pop();
-      const preview = filename.replace(/\.zip$/i, '');
-      if (!preview) return null;
-      return {
-        _id: item._id.toString(),
-        filename: filename,
-        url: preview
-
-      };
-    }).filter(Boolean);
-
-    res.status(200).json(result);
-
-
-  } catch (error) {
-    res.status(500);
-  }
-})
-
-app.get('/badges/download/:filename', (req, res) => {
-  const { filename } = req.params;
-  const filepath = `/app/badges/zips/${filename}`;
-  if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
-
-  res.download(filepath, filename);
-
-})
-
-
 app.use('/badges/previews', express.static('/app/badges/previews'));
-
-
+app.use('/themes/previews', express.static('/app/themes/previews/'));
 
 app.get('/', (req, res) => {
   const data = "abaunda";
   return res.json(data);
-})
-app.post('/:collection/search/:page',async (req,res)=>{
-  try {
-    const {search} = req.body;
-    const {collection,page} = req.params;
-    const skip = 20*(page-1);
-    if(!['themes','badges','splashes'].includes(collection)) return res.status(500);
-    const mongoCol = mongoDB.collection(collection)
-    const data = await mongoCol.find({"name":new RegExp(search,"i")}).skip(skip).limit(20).toArray();
-    const result = data.map(item => {
-      const filename = item.name.split("/").pop();
-      const preview = filename.replace(/\.zip$/i, '');
-      if (!preview) return null;
-      return {
-        _id: item._id.toString(),
-        filename: filename,
-        url: preview
-
-      };
-    }).filter(Boolean);
-
-    res.status(200).json(result);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).send("Internal Server Error");
-  }
 })
 app.listen(4000, () => {
   console.log("pisia");
