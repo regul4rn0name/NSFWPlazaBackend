@@ -177,7 +177,6 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
       fs.writeFileSync(previewOutput, previewFile.getData());
     }
 
-    // Insert into "moderate"
     const dbCollection = mongoDB.collection("moderate");
     const now = new Date();
 
@@ -219,6 +218,7 @@ app.get('/:type/:page', async (req, res) => {
     const sortQuery = {
       [sort]:order === 'asc' ? 1:-1
     };
+    
     const data = await collection.find(query).sort(sortQuery).skip(skip).limit(20).toArray();
     console.log("Filtered:", data.map(f => f.name));
     const result = data.map(item => {
@@ -241,12 +241,33 @@ app.get('/:type/:page', async (req, res) => {
   }
 })
 
-app.get('/:collection/download/:filename', (req, res) => {
-  const { filename,collection } = req.params;
-  const filepath = `/app/${collection}/zips/${filename}`;
-  if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
+app.get('/:collection/download/:filename', async (req, res) => {
+  try {
+    const { filename,collection } = req.params;
+    const dbCollection = await mongoDB.collection(collection);
+    const record = await dbCollection.findOne({'name':filename});
+    if(!record['downloads']){
+      record['downloads'] = 1;
+    }else{
+      record['downloads']++;
+  }
+   const result =  await dbCollection.updateOne({'_id':record._id},{$set:{'downloads':record.downloads}})
+   console.log(result);
+   console.log(record);
+    const filepath = `/app/${collection}/zips/${filename}`;
+    if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
 
-  res.download(filepath, filename);
+    res.download(filepath, filename);
+  } catch (error) {
+    console.log(error);
+    
+    const { filename,collection } = req.params;
+    const filepath = `/app/${collection}/zips/${filename}`;
+    if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
+
+    res.download(filepath, filename);
+  }
+  
 
 })
 
