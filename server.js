@@ -168,7 +168,7 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
 
 
     const zipFile = new AdmZip(newZipPath);
-    const previewFile = zipFile.getEntry(e => e.entryName.toLowerCase() === "preview.png" && !e.isDirectory);
+    const previewFile = zipFile.getEntry().find(e => e.entryName.toLowerCase() === "preview.png" && !e.isDirectory);
     let previewOutput = null;
     if (!previewFile) {
       console.error("No Preview in Zip");
