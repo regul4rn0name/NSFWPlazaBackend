@@ -184,7 +184,8 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
       name: finalName,
       tags,
       date:now,
-      collection
+      collection,
+      send:false
     });
 
     res.json({
