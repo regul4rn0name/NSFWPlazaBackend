@@ -43,7 +43,7 @@ const storage = multer.diskStorage({
 
 
 
-const upload = multer({storage});
+const upload = multer({ storage });
 
 app.get('/:collection/length', async (req, res) => {
   const { collection } = req.params;
@@ -168,14 +168,18 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
 
 
     const zipFile = new AdmZip(newZipPath);
-    const previewFile = zipFile.getEntry("preview.png");
+    const previewFile = zipFile.getEntry(e => e.entryName.toLowerCase() === "preview.png" && !e.isDirectory);
     let previewOutput = null;
-    if (previewFile) {
-      const previewDir = path.join(baseDir, collection, "previews");
-      fs.mkdirSync(previewDir, { recursive: true });
-      previewOutput = path.join(previewDir, finalName.replace(/\.zip$/i, ".png"));
-      fs.writeFileSync(previewOutput, previewFile.getData());
+    if (!previewFile) {
+      console.error("No Preview in Zip");
+      res.status(500).send("Upload Failed no preview.png in zip");
+
     }
+    const previewDir = path.join(baseDir, collection, "previews");
+    fs.mkdirSync(previewDir, { recursive: true });
+    previewOutput = path.join(previewDir, finalName.replace(/\.zip$/i, ".png"));
+    fs.writeFileSync(previewOutput, previewFile.getData());
+
 
     const dbCollection = mongoDB.collection("moderate");
     const now = new Date();
@@ -183,9 +187,9 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
     await dbCollection.insertOne({
       name: finalName,
       tags,
-      date:now,
+      date: now,
       collection,
-      send:false
+      send: false
     });
 
     res.json({
@@ -203,7 +207,7 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
 
 app.get('/:type/:page', async (req, res) => {
   try {
-    if(!['themes','badges','splashes'].includes(req.params['type'])){
+    if (!['themes', 'badges', 'splashes'].includes(req.params['type'])) {
       return res.status(400);
     }
     const type = req.params['type'];
@@ -211,15 +215,15 @@ app.get('/:type/:page', async (req, res) => {
     const skip = 20 * (page - 1);
     console.log(page);
     const collection = mongoDB.collection(type);
-    const {search='',sort='name',order='asc'} = req.query;
+    const { search = '', sort = 'name', order = 'asc' } = req.query;
     const query = {};
-    if(search){
-      query.name = new RegExp(search,'i');
+    if (search) {
+      query.name = new RegExp(search, 'i');
     }
     const sortQuery = {
-      [sort]:order === 'asc' ? 1:-1
+      [sort]: order === 'asc' ? 1 : -1
     };
-    
+
     const data = await collection.find(query).sort(sortQuery).skip(skip).limit(20).toArray();
     console.log("Filtered:", data.map(f => f.name));
     const result = data.map(item => {
@@ -244,31 +248,31 @@ app.get('/:type/:page', async (req, res) => {
 
 app.get('/:collection/download/:filename', async (req, res) => {
   try {
-    const { filename,collection } = req.params;
+    const { filename, collection } = req.params;
     const dbCollection = await mongoDB.collection(collection);
-    const record = await dbCollection.findOne({'name':filename});
-    if(!record['downloads']){
+    const record = await dbCollection.findOne({ 'name': filename });
+    if (!record['downloads']) {
       record['downloads'] = 1;
-    }else{
+    } else {
       record['downloads']++;
-  }
-   const result =  await dbCollection.updateOne({'_id':record._id},{$set:{'downloads':record.downloads}})
-   console.log(result);
-   console.log(record);
+    }
+    const result = await dbCollection.updateOne({ '_id': record._id }, { $set: { 'downloads': record.downloads } })
+    console.log(result);
+    console.log(record);
     const filepath = `/app/${collection}/zips/${filename}`;
     if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
 
     res.download(filepath, filename);
   } catch (error) {
     console.log(error);
-    
-    const { filename,collection } = req.params;
+
+    const { filename, collection } = req.params;
     const filepath = `/app/${collection}/zips/${filename}`;
     if (!fs.existsSync(filepath)) return res.status(404).send("File not Found");
 
     res.download(filepath, filename);
   }
-  
+
 
 })
 
