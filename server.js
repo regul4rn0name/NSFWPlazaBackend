@@ -168,7 +168,13 @@ app.post('/add/:collection', upload.single("zip"), async (req, res) => {
 
 
     const zipFile = new AdmZip(newZipPath);
-    const previewFile = zipFile.getEntry().find(e => e.entryName.toLowerCase() === "preview.png" && !e.isDirectory);
+    //
+    const entries = zipFile.getEntry();
+    if(!entries || entries.length===0){
+      console.log("zip epmty or unreadable");
+      res.status(500).send("zip empty or unreadable");
+    }
+    const previewFile = entries.find(e => e.entryName.toLowerCase() === "preview.png" && !e.isDirectory);
     let previewOutput = null;
     if (!previewFile) {
       console.error("No Preview in Zip");
