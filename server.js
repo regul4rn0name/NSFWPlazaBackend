@@ -280,7 +280,98 @@ app.get('/:collection/download/:filename', async (req, res) => {
 
 
 })
+const MODERATION_PASSWORD = process.env.MODERATION_PASSWORD;
 
+// Middleware helper to check moderation password
+const verifyAuth = (req, res, next) => {
+  const password = req.headers['x-moderation-password'];
+  if (password !== MODERATION_PASSWORD) {
+    return res.status(401).json({ error: "Unauthorized: Invalid moderation password" });
+  }
+  next();
+};
+
+// 1. Get all items in moderation
+app.get('/moderate/all', verifyAuth, async (req, res) => {
+  try {
+    if (!mongoDB) return res.status(503).json({ error: "Database not connected" });
+
+    const items = await mongoDB.collection("moderate").find({}).toArray();
+
+    const formattedItems = items.map(item => {
+      const filename = item.name;
+      const previewName = filename.replace(/\.zip$/i, '.png');
+      const targetCollection = item.collection || "themes";
+
+      return {
+        _id: item._id.toString(),
+        name: filename,
+        collection: targetCollection,
+        previewUrl: `/${targetCollection}/previews/${previewName}`,
+        tags: item.tags || [],
+        date: item.date
+      };
+    });
+
+    res.status(200).json(formattedItems);
+  } catch (error) {
+    console.error("Error fetching moderation items:", error);
+    res.status(500).json({ error: "Failed to fetch moderation queue" });
+  }
+});
+
+// 2. Accept item
+app.post('/moderate/accept/:id', verifyAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const objectId = new mongodb.ObjectId(id);
+
+    const record = await mongoDB.collection("moderate").findOne({ _id: objectId });
+    if (!record) return res.status(404).json({ error: "Item not found in moderation" });
+
+    const targetCollection = record.collection;
+    if (!["themes", "splashes", "badges"].includes(targetCollection)) {
+      return res.status(400).json({ error: "Invalid target collection" });
+    }
+
+    // Insert into target collection and delete from moderation
+    await mongoDB.collection(targetCollection).insertOne(record);
+    await mongoDB.collection("moderate").deleteOne({ _id: objectId });
+
+    res.status(200).json({ success: true, message: `Moved to ${targetCollection}` });
+  } catch (error) {
+    console.error("Error accepting item:", error);
+    res.status(500).json({ error: "Failed to accept item" });
+  }
+});
+
+// 3. Reject item
+app.post('/moderate/reject/:id', verifyAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const objectId = new mongodb.ObjectId(id);
+
+    const record = await mongoDB.collection("moderate").findOne({ _id: objectId });
+    if (!record) return res.status(404).json({ error: "Item not found" });
+
+    const collection = record.collection;
+    const zipName = record.name;
+    const previewName = zipName.replace(/\.zip$/i, ".png");
+
+    const zipPath = path.join(baseDir, collection, "zips", zipName);
+    const previewPath = path.join(baseDir, collection, "previews", previewName);
+
+    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+    if (fs.existsSync(previewPath)) fs.unlinkSync(previewPath);
+
+    await mongoDB.collection("moderate").deleteOne({ _id: objectId });
+
+    res.status(200).json({ success: true, message: "Item rejected and files deleted" });
+  } catch (error) {
+    console.error("Error rejecting item:", error);
+    res.status(500).json({ error: "Failed to reject item" });
+  }
+});
 app.use('/splashes/previews', express.static('/app/splashes/previews'));
 app.use('/badges/previews', express.static('/app/badges/previews'));
 app.use('/themes/previews', express.static('/app/themes/previews/'));
