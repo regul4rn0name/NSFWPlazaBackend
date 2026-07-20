@@ -31,7 +31,7 @@ async function connectMongo() {
 connectMongo();
 
 const verifyAuth = (req, res, next) => {
-  const MODERATION_PASSWORD = process.env.MODERATION_PASSWORD || "admin123";
+  const MODERATION_PASSWORD = process.env.MODERATION_PASSWORD;
   const password = req.headers['x-moderation-password'];
   if (password !== MODERATION_PASSWORD) {
     return res.status(401).json({ error: "Unauthorized: Invalid moderation password" });
