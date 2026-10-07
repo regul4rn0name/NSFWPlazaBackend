@@ -298,14 +298,16 @@ app.get('/:type/:page', async (req, res) => {
     const skip = 20 * (page - 1);
     console.log(page);
     const collection = mongoDB.collection(type);
-    const { search = '', sort = 'name', order = 'asc' } = req.query;
+    const { search = '', sort = 'default', order = 'asc' } = req.query;
     const query = {};
     if (search) {
       query.name = new RegExp(search, 'i');
     }
-    const sortQuery = {
-      [sort]: order === 'asc' ? 1 : -1
-    };
+    // The frontend sends sort=default. Sort newest uploads first so accepted
+    // items appear immediately instead of sorting on a nonexistent field.
+    const sortQuery = sort === 'default'
+      ? { _id: -1 }
+      : { [sort]: order === 'asc' ? 1 : -1, _id: -1 };
 
     const data = await collection.find(query).sort(sortQuery).skip(skip).limit(20).toArray();
     console.log("Filtered:", data.map(f => f.name));
